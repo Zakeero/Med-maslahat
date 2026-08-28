@@ -39,6 +39,9 @@ class ContentService:
                 raise ContentError(f"Javobda {key} maydoni yo'q")
         if len(data["sources"]) < 2:
             raise ContentError("Kamida 2 ta manba kerak")
+        data["post"] = clean_post_text(data["post"])
+        if len(data["post"]) > 850:
+            raise ContentError("Post juda uzun. Qayta yaratib ko'ring")
         issue = find_safety_issue(data["post"])
         if issue:
             raise ContentError(issue)
@@ -59,3 +62,13 @@ class ContentService:
         data["image"] = base64.b64decode(image_b64)
         return data
 
+
+def clean_post_text(text: str) -> str:
+    """Remove web-search citation markup while preserving readable copy."""
+    text = re.sub(r"\s*\(\[[^\]]+\]\(https?://[^)]+\)\)", "", text)
+    text = re.sub(r"\[([^\]]+)\]\(https?://[^)]+\)", r"\1", text)
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r" {2,}", " ", text)
+    return text.strip()
