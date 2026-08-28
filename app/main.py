@@ -49,16 +49,15 @@ async def send_preview(draft_id: int) -> None:
     if not draft:
         return
     caption = f"📝 <b>{html.escape(draft.title)}</b>\n\n{html.escape(draft.text)}"
-    if len(caption) <= 1000:
-        await bot.send_photo(
-            settings.admin_user_id,
-            BufferedInputFile(draft.image, filename=f"draft-{draft.id}.png"),
-            caption=caption,
-            reply_markup=review_keyboard(draft.id),
-        )
-    else:
-        await bot.send_photo(settings.admin_user_id, BufferedInputFile(draft.image, filename=f"draft-{draft.id}.png"))
-        await bot.send_message(settings.admin_user_id, caption, reply_markup=review_keyboard(draft.id))
+    if len(caption) > 1000:
+        await bot.send_message(settings.admin_user_id, "⚠️ Draft caption limitidan oshdi. /new bilan qayta yarating.")
+        return
+    await bot.send_photo(
+        settings.admin_user_id,
+        BufferedInputFile(draft.image, filename=f"draft-{draft.id}.png"),
+        caption=caption,
+        reply_markup=review_keyboard(draft.id),
+    )
 
 
 async def create_draft(topic: str | None = None) -> None:
@@ -127,11 +126,10 @@ async def approve(callback: CallbackQuery) -> None:
         return
     final_text = html.escape(draft.text) + source_block(draft.sources)
     photo = BufferedInputFile(draft.image, filename=f"med-maslahat-{draft.id}.png")
-    if len(final_text) <= 1000:
-        await bot.send_photo(settings.channel_id, photo, caption=final_text)
-    else:
-        await bot.send_photo(settings.channel_id, photo)
-        await bot.send_message(settings.channel_id, final_text, disable_web_page_preview=True)
+    if len(final_text) > 1000:
+        await callback.answer("Post caption uchun juda uzun. Avval tahrirlang.", show_alert=True)
+        return
+    await bot.send_photo(settings.channel_id, photo, caption=final_text)
     await db.mark(draft_id, "published")
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.answer("Kanalga joylandi ✅", show_alert=True)
