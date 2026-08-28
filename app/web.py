@@ -37,7 +37,10 @@ def minute_key(value: datetime) -> str:
 
 async def notify_admin(text: str) -> None:
     link = f"\n{settings.public_url}/dashboard" if settings.public_url else ""
-    await bot.send_message(settings.admin_user_id, text + link)
+    try:
+        await bot.send_message(settings.admin_user_id, text + link)
+    except Exception:
+        logging.exception("Admin notification failed")
 
 
 async def create_weekly_plan() -> None:
@@ -148,8 +151,10 @@ async def dashboard(request: Request):
         return RedirectResponse("/login", status_code=303)
     plan, items = await db.latest_plan()
     posts = await db.review_posts()
+    flash = request.session.pop("flash", None)
     return templates.TemplateResponse(request=request, name="dashboard.html", context={
         "plan": plan, "items": items, "posts": posts, "timezone": settings.timezone,
+        "flash": flash,
     })
 
 
@@ -157,7 +162,12 @@ async def dashboard(request: Request):
 async def generate_plan(request: Request):
     if not logged_in(request):
         return RedirectResponse("/login", status_code=303)
-    asyncio.create_task(create_weekly_plan())
+    try:
+        await create_weekly_plan()
+        request.session["flash"] = {"kind": "success", "text": "14 mavzuli haftalik reja tayyor."}
+    except Exception as exc:
+        logging.exception("Weekly plan generation failed")
+        request.session["flash"] = {"kind": "error", "text": f"Reja yaratilmadi: {exc}"}
     return RedirectResponse("/dashboard", status_code=303)
 
 
