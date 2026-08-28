@@ -1,11 +1,12 @@
 <!doctype html>
 <html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Med Maslahat — Kontent paneli</title><link rel="stylesheet" href="/static/app.css"></head>
+<title>Med Maslahat — Kontent paneli</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/flash.css"></head>
 <body><header><div><span class="brand-mark small">M+</span><strong>Med Maslahat</strong></div>
 <form method="post" action="/logout"><button class="ghost">Chiqish</button></form></header>
 <main><section class="hero"><div><p class="eyebrow">{{ timezone }}</p><h1>Haftalik kontent boshqaruvi</h1>
 <p>Rejani tasdiqlang, postlarni chiqishidan bir soat oldin tekshiring.</p></div>
 <form method="post" action="/plans/generate"><button>14 mavzuli reja yaratish</button></form></section>
+{% if flash %}<div class="flash {{ flash.kind }}">{{ flash.text }}</div>{% endif %}
 
 <section><div class="section-title"><h2>Haftalik reja</h2>
 {% if plan %}<span class="status {{ plan.status }}">{{ plan.status }}</span>{% endif %}</div>
