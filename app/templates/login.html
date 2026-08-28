@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Med Maslahat — Kirish</title><link rel="stylesheet" href="/static/app.css"></head>
+<body class="login-page"><main class="login-card"><div class="brand-mark">M+</div>
+<h1>Kontent paneli</h1><p>Haftalik reja va postlarni boshqarish</p>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<form method="post"><label>Admin paroli</label><input type="password" name="password" required autofocus>
+<button type="submit">Panelga kirish</button></form></main></body></html>
