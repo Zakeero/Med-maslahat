@@ -124,9 +124,14 @@ async def approve(callback: CallbackQuery) -> None:
     if not draft or draft.status != "pending":
         await callback.answer("Bu post allaqachon ko‘rib chiqilgan.", show_alert=True)
         return
-    final_text = html.escape(draft.text) + source_block(draft.sources)
+    final_text = (
+        f"<b>{html.escape(draft.title)}</b>\n\n"
+        + html.escape(draft.text)
+        + source_block(draft.sources)
+    )
     photo = BufferedInputFile(draft.image, filename=f"med-maslahat-{draft.id}.png")
-    if len(final_text) > 1000:
+    visible_length = len(draft.title) + len(draft.text) + sum(len(s["name"]) for s in draft.sources[:3]) + 20
+    if visible_length > 1000:
         await callback.answer("Post caption uchun juda uzun. Avval tahrirlang.", show_alert=True)
         return
     await bot.send_photo(settings.channel_id, photo, caption=final_text)
