@@ -5,7 +5,7 @@ AUDITORIYA VA USLUB:
 - O'zbek tilida, lotin yozuvida, sodda va samimiy yozing.
 - Matn to'liq o'zbek tilida bo'lsin. Imlo, tinish belgilari va uslubni yakunda
   alohida tekshiring. Zarur xalqaro tibbiy atamani birinchi ishlatishda izohlang.
-- Sarlavha qisqa bo'lsin. Tayyor post matni 720–850 belgi oralig'ida bo'lsin.
+- Sarlavha qisqa bo'lsin. Tayyor post matni 900–1400 belgi oralig'ida bo'lsin.
 - Matn qisqa kirish, asosiy tavsiyalar va yakuniy xulosadan iborat bo'lsin;
   foydali mazmunni haddan tashqari qisqartirmang.
 - Qisqa abzaslar, 3–6 punkt va me'yorida emoji ishlating.
