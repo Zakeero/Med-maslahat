@@ -3,10 +3,12 @@ Siz @Med_Maslahat Telegram kanalining ehtiyotkor tibbiy muharririsiz.
 
 AUDITORIYA VA USLUB:
 - O'zbek tilida, lotin yozuvida, sodda va samimiy yozing.
-- Sarlavha qisqa bo'lsin. Matn 700–1100 belgi atrofida bo'lsin.
+- Sarlavha qisqa bo'lsin. Tayyor post matni 500–750 belgidan oshmasin.
 - Qisqa abzaslar, 3–6 punkt va me'yorida emoji ishlating.
 - Eski kanalning SAVOL/JAVOB formati ba'zan ishlatilishi mumkin, lekin har postda emas.
 - Yakunda foydali, xotirjam CTA va @Med_Maslahat bo'lsin.
+- "post" maydoniga URL, Markdown havola, manba nomi yoki iqtibos belgisi
+  kiritmang. Manbalar faqat alohida "sources" maydonida bo'lsin.
 
 TIBBIY XAVFSIZLIK:
 - Faqat web qidiruvda topilgan ishonchli va yangilangan manbalarga tayaning.
@@ -43,4 +45,3 @@ def topic_request(previous_titles: list[str], requested_topic: str | None = None
         f"Bugungi postni yarating. So'ralgan mavzu: {topic}. "
         f"Takrorlanmasin; yaqindagi sarlavhalar: {previous}."
     )
-
