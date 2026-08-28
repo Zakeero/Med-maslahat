@@ -21,6 +21,9 @@ class Settings:
     text_model: str
     image_model: str
     database_path: Path
+    admin_password: str
+    session_secret: str
+    public_url: str
 
 
 def load_settings() -> Settings:
@@ -28,6 +31,8 @@ def load_settings() -> Settings:
         "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
         "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", "").strip(),
         "ADMIN_USER_ID": os.getenv("ADMIN_USER_ID", "").strip(),
+        "ADMIN_PASSWORD": os.getenv("ADMIN_PASSWORD", "").strip(),
+        "SESSION_SECRET": os.getenv("SESSION_SECRET", "").strip(),
     }
     missing = [key for key, value in required.items() if not value]
     if missing:
@@ -54,4 +59,7 @@ def load_settings() -> Settings:
         text_model=os.getenv("TEXT_MODEL", "gpt-5-mini").strip(),
         image_model=os.getenv("IMAGE_MODEL", "gpt-image-1-mini").strip(),
         database_path=db_path,
+        admin_password=required["ADMIN_PASSWORD"],
+        session_secret=required["SESSION_SECRET"],
+        public_url=os.getenv("PUBLIC_URL", "").strip().rstrip("/"),
     )
