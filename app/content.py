@@ -6,7 +6,7 @@ import re
 
 from openai import AsyncOpenAI
 
-from .prompts import EDITORIAL_PROMPT, topic_request
+from .prompts import EDITORIAL_PROMPT, WEEKLY_PLAN_PROMPT, topic_request
 from .safety import find_safety_issue
 
 
@@ -50,8 +50,10 @@ class ContentService:
             model=self.image_model,
             prompt=(
                 data["image_prompt"]
-                + ". Clean trustworthy healthcare editorial style, teal and white palette, "
-                  "no words, no letters, no watermark, no logo, square composition."
+                + ". Distinctive vibrant healthcare editorial illustration, bright coral, "
+                  "turquoise, cobalt blue and warm yellow accents, strong focal subject, "
+                  "modern premium composition, soft dimensional lighting, no words, "
+                  "no letters, no watermark, no logo, square composition."
             ),
             size="1024x1024",
             quality="low",
@@ -61,6 +63,24 @@ class ContentService:
             raise ContentError("Rasm yaratilmadi")
         data["image"] = base64.b64decode(image_b64)
         return data
+
+    async def generate_weekly_plan(self) -> list[dict]:
+        response = await self.client.responses.create(
+            model=self.text_model,
+            instructions="Siz o'zbek tilidagi tibbiy kontent strategisiz.",
+            input=WEEKLY_PLAN_PROMPT,
+        )
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", response.output_text.strip(), flags=re.I)
+        try:
+            items = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ContentError("Haftalik reja JSON formatida emas") from exc
+        if not isinstance(items, list) or len(items) != 14:
+            raise ContentError("Haftalik reja aynan 14 ta mavzudan iborat bo'lishi kerak")
+        for item in items:
+            if not all(key in item for key in ("day", "time", "topic", "angle")):
+                raise ContentError("Haftalik reja maydonlari to'liq emas")
+        return items
 
 
 def clean_post_text(text: str) -> str:
