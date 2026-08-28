@@ -8,8 +8,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from aiogram import Bot
-from aiogram.types import BufferedInputFile
+from aiogram import Bot, Dispatcher, Router
+from aiogram.filters import Command
+from aiogram.types import (
+    BotCommand, BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo,
+)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -28,6 +31,9 @@ tz = ZoneInfo(settings.timezone)
 db = Database(settings.database_path)
 content = ContentService(settings.openai_api_key, settings.text_model, settings.image_model)
 bot = Bot(settings.bot_token)
+dispatcher = Dispatcher()
+telegram_router = Router()
+dispatcher.include_router(telegram_router)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
@@ -78,18 +84,89 @@ async def prepare_upcoming_post() -> None:
     await notify_admin("🔍 Bir soatdan keyin chiqadigan post tayyor. Web-panelda tekshirib tasdiqlang:")
 
 
-async def publish_due_post() -> None:
-    now = datetime.now(tz).replace(second=0, microsecond=0)
-    post = await db.approved_post_due(minute_key(now))
-    if not post:
-        return
+async def publish_content(post: dict) -> None:
     await bot.send_photo(
         settings.channel_id,
         BufferedInputFile(post["image"], filename=f'med-maslahat-{post["id"]}.png'),
     )
     text = f'<b>{html.escape(post["title"])}</b>\n\n{html.escape(post["text"])}'
     await bot.send_message(settings.channel_id, text, parse_mode="HTML")
+
+
+async def publish_due_post() -> None:
+    now = datetime.now(tz).replace(second=0, microsecond=0)
+    post = await db.approved_post_due(minute_key(now))
+    if not post:
+        return
+    await publish_content(post)
     await db.mark_scheduled_published(post["id"])
+
+
+def panel_keyboard() -> InlineKeyboardMarkup | None:
+    if not settings.public_url:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🌐 Web-panelni ochish", web_app=WebAppInfo(url=settings.public_url))
+    ]])
+
+
+def admin_message(message: Message) -> bool:
+    return bool(message.from_user and message.from_user.id == settings.admin_user_id)
+
+
+async def create_manual_draft(topic: str) -> None:
+    try:
+        generated = await content.generate(await db.recent_titles(), topic)
+        await db.create_manual_post(
+            topic, generated["title"], generated["post"], generated["image"], generated["sources"]
+        )
+        await notify_admin("✅ Navbatdan tashqari post tayyor. Web-panelda tekshiring:")
+    except Exception as exc:
+        logging.exception("Manual post generation failed")
+        await notify_admin(f"⚠️ Post yaratilmadi: {exc}")
+
+
+@telegram_router.message(Command("start", "panel"))
+async def telegram_start(message: Message) -> None:
+    if not admin_message(message):
+        return
+    await message.answer(
+        "Med Maslahat AI ishlayapti. Reja va postlarni web-panelda boshqaring.",
+        reply_markup=panel_keyboard(),
+    )
+
+
+@telegram_router.message(Command("id"))
+async def telegram_id(message: Message) -> None:
+    await message.answer(f"Sizning Telegram ID: <code>{message.from_user.id}</code>", parse_mode="HTML")
+
+
+@telegram_router.message(Command("queue"))
+async def telegram_queue(message: Message) -> None:
+    if not admin_message(message):
+        return
+    count = await db.review_count()
+    await message.answer(f"Tekshiruv va tasdiq kutayotgan postlar: {count} ta", reply_markup=panel_keyboard())
+
+
+@telegram_router.message(Command("new"))
+async def telegram_new(message: Message) -> None:
+    if not admin_message(message):
+        return
+    await message.answer("⏳ Navbatdan tashqari post tayyorlanyapti…")
+    asyncio.create_task(create_manual_draft("Mavzuni o'zingiz tanlang"))
+
+
+@telegram_router.message(Command("topic"))
+async def telegram_topic(message: Message) -> None:
+    if not admin_message(message):
+        return
+    topic = (message.text or "").partition(" ")[2].strip()
+    if not topic:
+        await message.answer("Masalan: <code>/topic uyqu sifati</code>", parse_mode="HTML")
+        return
+    await message.answer(f"⏳ “{html.escape(topic)}” mavzusida post tayyorlanyapti…")
+    asyncio.create_task(create_manual_draft(topic))
 
 
 @asynccontextmanager
@@ -100,7 +177,20 @@ async def lifespan(_: FastAPI):
     scheduler.add_job(prepare_upcoming_post, "cron", hour="9,13", minute=0, id="prepare-posts")
     scheduler.add_job(publish_due_post, "cron", hour="10,14", minute=0, id="publish-posts")
     scheduler.start()
+    await bot.delete_webhook(drop_pending_updates=True)
+    await bot.set_my_commands([
+        BotCommand(command="start", description="Botni ishga tushirish"),
+        BotCommand(command="new", description="Yangi post tayyorlash"),
+        BotCommand(command="topic", description="Berilgan mavzuda post"),
+        BotCommand(command="queue", description="Tasdiq kutayotgan postlar"),
+        BotCommand(command="panel", description="Web-panelni ochish"),
+        BotCommand(command="id", description="Telegram ID"),
+    ])
+    polling_task = asyncio.create_task(
+        dispatcher.start_polling(bot, handle_signals=False, close_bot_session=False)
+    )
     yield
+    polling_task.cancel()
     scheduler.shutdown(wait=False)
     await bot.session.close()
 
@@ -188,18 +278,27 @@ async def edit_item(request: Request, item_id: int, topic: str = Form(...), angl
 
 
 @app.get("/posts/{post_id}/image")
-async def post_image(request: Request, post_id: int):
+async def post_image(request: Request, post_id: int, kind: str = "scheduled"):
     if not logged_in(request):
         return Response(status_code=401)
-    image = await db.scheduled_post_image(post_id)
+    image = await db.scheduled_post_image(post_id, kind)
     return Response(image or b"", media_type="image/png")
 
 
 @app.post("/posts/{post_id}/{action}")
-async def review_post(request: Request, post_id: int, action: str):
+async def review_post(request: Request, post_id: int, action: str, kind: str = "scheduled"):
     if not logged_in(request):
         return RedirectResponse("/login", status_code=303)
     if action not in {"approve", "reject"}:
         return Response(status_code=400)
-    await db.set_post_status(post_id, "approved" if action == "approve" else "rejected")
+    if kind == "manual":
+        if action == "approve":
+            post = await db.manual_post(post_id)
+            if post:
+                await publish_content(post)
+                await db.mark_manual_published(post_id)
+        else:
+            await db.reject_manual_post(post_id)
+    else:
+        await db.set_post_status(post_id, "approved" if action == "approve" else "rejected")
     return RedirectResponse("/dashboard", status_code=303)
