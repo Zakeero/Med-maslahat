@@ -71,6 +71,20 @@ class Database:
                     FOREIGN KEY(plan_item_id) REFERENCES plan_items(id)
                 )
             """)
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS manual_posts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    image BLOB NOT NULL,
+                    sources_json TEXT NOT NULL,
+                    topic TEXT NOT NULL,
+                    angle TEXT NOT NULL DEFAULT 'Navbatdan tashqari post',
+                    status TEXT NOT NULL DEFAULT 'review',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    published_at TEXT
+                )
+            """)
             await db.commit()
 
     async def create_weekly_plan(self, week_start: str, items: list[dict[str, str]]) -> int:
@@ -154,15 +168,66 @@ class Database:
                 item = dict(row)
                 item["sources"] = json.loads(item.pop("sources_json"))
                 item.pop("image", None)
+                item["kind"] = "scheduled"
+                result.append(item)
+            manual_rows = await (await db.execute("""
+                SELECT id,title,text,sources_json,topic,angle,status,created_at
+                FROM manual_posts WHERE status IN ('review','approved') ORDER BY id DESC
+            """)).fetchall()
+            for row in manual_rows:
+                item = dict(row)
+                item["sources"] = json.loads(item.pop("sources_json"))
+                item["scheduled_at"] = "Navbatdan tashqari"
+                item["kind"] = "manual"
                 result.append(item)
             return result
 
-    async def scheduled_post_image(self, post_id: int) -> bytes | None:
+    async def scheduled_post_image(self, post_id: int, kind: str = "scheduled") -> bytes | None:
         async with aiosqlite.connect(self.path) as db:
+            table = "manual_posts" if kind == "manual" else "scheduled_posts"
             row = await (await db.execute(
-                "SELECT image FROM scheduled_posts WHERE id=?", (post_id,)
+                f"SELECT image FROM {table} WHERE id=?", (post_id,)
             )).fetchone()
             return row[0] if row else None
+
+    async def create_manual_post(self, topic: str, title: str, text: str, image: bytes,
+                                 sources: list[dict[str, str]]) -> int:
+        async with aiosqlite.connect(self.path) as db:
+            cursor = await db.execute("""
+                INSERT INTO manual_posts(title,text,image,sources_json,topic)
+                VALUES(?,?,?,?,?)
+            """, (title, text, image, json.dumps(sources, ensure_ascii=False), topic))
+            await db.commit()
+            return int(cursor.lastrowid)
+
+    async def manual_post(self, post_id: int):
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            row = await (await db.execute("SELECT * FROM manual_posts WHERE id=?", (post_id,))).fetchone()
+            return dict(row) if row else None
+
+    async def mark_manual_published(self, post_id: int) -> None:
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute(
+                "UPDATE manual_posts SET status='published',published_at=CURRENT_TIMESTAMP WHERE id=?",
+                (post_id,),
+            )
+            await db.commit()
+
+    async def reject_manual_post(self, post_id: int) -> None:
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute("UPDATE manual_posts SET status='rejected' WHERE id=?", (post_id,))
+            await db.commit()
+
+    async def review_count(self) -> int:
+        async with aiosqlite.connect(self.path) as db:
+            scheduled = await (await db.execute(
+                "SELECT COUNT(*) FROM scheduled_posts WHERE status='review'"
+            )).fetchone()
+            manual = await (await db.execute(
+                "SELECT COUNT(*) FROM manual_posts WHERE status='review'"
+            )).fetchone()
+            return int(scheduled[0]) + int(manual[0])
 
     async def set_post_status(self, post_id: int, status: str) -> None:
         async with aiosqlite.connect(self.path) as db:
