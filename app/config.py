@@ -34,7 +34,7 @@ def load_settings() -> Settings:
         raise RuntimeError("Yetishmayotgan sozlamalar: " + ", ".join(missing))
 
     times = tuple(
-        item.strip() for item in os.getenv("DAILY_TIMES", "09:00,14:00,20:00").split(",")
+        item.strip() for item in os.getenv("DAILY_TIMES", "10:00,14:00").split(",")
         if item.strip()
     )
     for item in times:
@@ -55,4 +55,3 @@ def load_settings() -> Settings:
         image_model=os.getenv("IMAGE_MODEL", "gpt-image-1-mini").strip(),
         database_path=db_path,
     )
-
