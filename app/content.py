@@ -40,8 +40,6 @@ class ContentService:
         if len(data["sources"]) < 2:
             raise ContentError("Kamida 2 ta manba kerak")
         data["post"] = clean_post_text(data["post"])
-        if len(data["post"]) > 850:
-            raise ContentError("Post juda uzun. Qayta yaratib ko'ring")
         issue = find_safety_issue(data["post"])
         if issue:
             raise ContentError(issue)
