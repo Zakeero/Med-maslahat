@@ -5,7 +5,7 @@ keyin kanalga chiqaradigan Telegram bot.
 
 ## Nimalar ishlaydi?
 
-- Har kuni `09:00`, `14:00`, `20:00` da yangi draft yaratish
+- Har kuni `10:00` va `14:00` da yangi draft yaratish
 - Ishonchli tibbiy manbalarni web orqali qidirish
 - Rasm yaratish va shaxsiy botga preview yuborish
 - Tasdiqlash, rad etish, qayta yozish va matnni qo‘lda tahrirlash
