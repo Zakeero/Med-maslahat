@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Med Maslahat — Kontent paneli</title><link rel="stylesheet" href="/static/app.css"></head>
+<body><header><div><span class="brand-mark small">M+</span><strong>Med Maslahat</strong></div>
+<form method="post" action="/logout"><button class="ghost">Chiqish</button></form></header>
+<main><section class="hero"><div><p class="eyebrow">{{ timezone }}</p><h1>Haftalik kontent boshqaruvi</h1>
+<p>Rejani tasdiqlang, postlarni chiqishidan bir soat oldin tekshiring.</p></div>
+<form method="post" action="/plans/generate"><button>14 mavzuli reja yaratish</button></form></section>
+
+<section><div class="section-title"><h2>Haftalik reja</h2>
+{% if plan %}<span class="status {{ plan.status }}">{{ plan.status }}</span>{% endif %}</div>
+{% if not plan %}<div class="empty">Hali reja yaratilmagan.</div>{% else %}
+<div class="plan-grid">{% for item in items %}<form class="plan-item" method="post" action="/items/{{ item.id }}/edit">
+<time>{{ item.scheduled_at[0:10] }} · {{ item.scheduled_at[11:16] }}</time>
+<input name="topic" value="{{ item.topic }}" required><textarea name="angle" rows="3" required>{{ item.angle }}</textarea>
+<button class="secondary">Saqlash</button></form>{% endfor %}</div>
+{% if plan.status != 'approved' %}<form class="approve-plan" method="post" action="/plans/{{ plan.id }}/approve">
+<button>Haftalik rejani tasdiqlash</button></form>{% endif %}{% endif %}</section>
+
+<section><div class="section-title"><h2>Tekshiruvdagi postlar</h2><span>{{ posts|length }} ta</span></div>
+{% if not posts %}<div class="empty">Post chiqishidan bir soat oldin shu yerda paydo bo‘ladi.</div>{% endif %}
+<div class="post-grid">{% for post in posts %}<article class="post-card">
+<img src="/posts/{{ post.id }}/image" alt="{{ post.title }}"><div class="post-body">
+<time>{{ post.scheduled_at[0:10] }} · {{ post.scheduled_at[11:16] }}</time><h3>{{ post.title }}</h3>
+<p class="copy">{{ post.text }}</p><details><summary>Tekshirilgan manbalar</summary><ul>
+{% for source in post.sources %}<li><a href="{{ source.url }}" target="_blank" rel="noreferrer">{{ source.name }}</a></li>{% endfor %}</ul></details>
+<div class="actions"><form method="post" action="/posts/{{ post.id }}/approve"><button>Tasdiqlash</button></form>
+<form method="post" action="/posts/{{ post.id }}/reject"><button class="danger">Rad etish</button></form></div>
+{% if post.status == 'approved' %}<div class="approved-note">Tasdiqlandi — belgilangan vaqtda chiqadi</div>{% endif %}
+</div></article>{% endfor %}</div></section></main></body></html>
