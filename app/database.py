@@ -246,6 +246,18 @@ class Database:
             item["sources"] = json.loads(item.pop("sources_json"))
             return item
 
+    async def scheduled_post(self, post_id: int):
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            row = await (await db.execute(
+                "SELECT * FROM scheduled_posts WHERE id=?", (post_id,)
+            )).fetchone()
+            if not row:
+                return None
+            item = dict(row)
+            item["sources"] = json.loads(item.pop("sources_json"))
+            return item
+
     async def mark_scheduled_published(self, post_id: int) -> None:
         async with aiosqlite.connect(self.path) as db:
             await db.execute(
