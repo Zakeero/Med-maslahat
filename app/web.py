@@ -8,10 +8,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from aiogram import Bot, Dispatcher, Router
+from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
 from aiogram.types import (
-    BotCommand, BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo,
+    BotCommand, BufferedInputFile, CallbackQuery, InlineKeyboardButton,
+    InlineKeyboardMarkup, Message, WebAppInfo,
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Form, Request
@@ -77,11 +78,11 @@ async def prepare_upcoming_post() -> None:
     if not item:
         return
     generated = await content.generate(await db.recent_titles(), f'{item["topic"]}. Yondashuv: {item["angle"]}')
-    await db.create_scheduled_post(
+    post_id = await db.create_scheduled_post(
         item["id"], item["scheduled_at"], generated["title"], generated["post"],
         generated["image"], generated["sources"],
     )
-    await notify_admin("🔍 Bir soatdan keyin chiqadigan post tayyor. Web-panelda tekshirib tasdiqlang:")
+    await send_post_review(post_id, "scheduled")
 
 
 async def publish_content(post: dict) -> None:
@@ -110,6 +111,45 @@ def panel_keyboard() -> InlineKeyboardMarkup | None:
     ]])
 
 
+def review_keyboard(post_id: int, kind: str) -> InlineKeyboardMarkup:
+    rows = [[
+        InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"review:{kind}:approve:{post_id}"),
+        InlineKeyboardButton(text="❌ Rad etish", callback_data=f"review:{kind}:reject:{post_id}"),
+    ]]
+    if settings.public_url:
+        rows.append([
+            InlineKeyboardButton(
+                text="✏️ Panelda ko‘rish",
+                web_app=WebAppInfo(url=f"{settings.public_url}/dashboard"),
+            )
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def send_post_review(post_id: int, kind: str) -> None:
+    post = await (db.manual_post(post_id) if kind == "manual" else db.scheduled_post(post_id))
+    if not post:
+        return
+    await bot.send_photo(
+        settings.admin_user_id,
+        BufferedInputFile(post["image"], filename=f"review-{kind}-{post_id}.png"),
+    )
+    timing = "Tasdiqlasangiz darhol chiqadi" if kind == "manual" else (
+        f"Rejalashtirilgan vaqt: {post['scheduled_at'][0:10]} · {post['scheduled_at'][11:16]}"
+    )
+    review_text = (
+        f"📝 <b>{html.escape(post['title'])}</b>\n\n"
+        f"{html.escape(post['text'])}\n\n"
+        f"🕒 {html.escape(timing)}"
+    )
+    await bot.send_message(
+        settings.admin_user_id,
+        review_text,
+        parse_mode="HTML",
+        reply_markup=review_keyboard(post_id, kind),
+    )
+
+
 def admin_message(message: Message) -> bool:
     return bool(message.from_user and message.from_user.id == settings.admin_user_id)
 
@@ -117,10 +157,10 @@ def admin_message(message: Message) -> bool:
 async def create_manual_draft(topic: str) -> None:
     try:
         generated = await content.generate(await db.recent_titles(), topic)
-        await db.create_manual_post(
+        post_id = await db.create_manual_post(
             topic, generated["title"], generated["post"], generated["image"], generated["sources"]
         )
-        await notify_admin("✅ Navbatdan tashqari post tayyor. Web-panelda tekshiring:")
+        await send_post_review(post_id, "manual")
     except Exception as exc:
         logging.exception("Manual post generation failed")
         await notify_admin(f"⚠️ Post yaratilmadi: {exc}")
@@ -167,6 +207,33 @@ async def telegram_topic(message: Message) -> None:
         return
     await message.answer(f"⏳ “{html.escape(topic)}” mavzusida post tayyorlanyapti…")
     asyncio.create_task(create_manual_draft(topic))
+
+
+@telegram_router.callback_query(F.data.startswith("review:"))
+async def telegram_review(callback: CallbackQuery) -> None:
+    if callback.from_user.id != settings.admin_user_id or not callback.data:
+        return
+    _, kind, action, raw_id = callback.data.split(":", maxsplit=3)
+    post_id = int(raw_id)
+    if kind == "scheduled":
+        await db.set_post_status(post_id, "approved" if action == "approve" else "rejected")
+        result = "Tasdiqlandi — belgilangan vaqtda chiqadi ✅" if action == "approve" else "Post rad etildi."
+    elif kind == "manual":
+        if action == "approve":
+            post = await db.manual_post(post_id)
+            if post:
+                await publish_content(post)
+                await db.mark_manual_published(post_id)
+            result = "Tasdiqlandi va kanalga chiqarildi ✅"
+        else:
+            await db.reject_manual_post(post_id)
+            result = "Post rad etildi."
+    else:
+        await callback.answer("Noto‘g‘ri so‘rov", show_alert=True)
+        return
+    if callback.message:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer(result, show_alert=True)
 
 
 @asynccontextmanager
